@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { FigmaDesign } from '@/types'
-import { ExternalLink, Trash2, Code, ChevronDown, ChevronUp } from 'lucide-react'
+import { ExternalLink, Trash2, Code, ChevronDown, ChevronUp, Eye } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import toast from 'react-hot-toast'
+import ComponentViewer from './ComponentViewer'
 
 interface DesignCardProps {
   design: FigmaDesign
@@ -14,6 +15,7 @@ export default function DesignCard({ design, onDelete }: DesignCardProps) {
   const [components, setComponents] = useState<any[]>([])
   const [showComponents, setShowComponents] = useState(false)
   const [loadingComponents, setLoadingComponents] = useState(false)
+  const [selectedComponent, setSelectedComponent] = useState<any>(null)
 
   const handleGenerate = async () => {
     setGenerating(true)
@@ -154,21 +156,39 @@ export default function DesignCard({ design, onDelete }: DesignCardProps) {
               components.map((component) => (
                 <div
                   key={component.id}
-                  className="p-3 bg-gray-50 rounded border border-gray-200"
+                  className="p-3 bg-gray-50 rounded border border-gray-200 hover:border-blue-300 transition-colors"
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-mono text-sm font-semibold">
                       {component.name}
                     </span>
-                    <span className="text-xs text-gray-500">{component.language}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500">{component.language}</span>
+                      <button
+                        onClick={() => setSelectedComponent(component)}
+                        className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                      >
+                        <Eye size={12} />
+                        View
+                      </button>
+                    </div>
                   </div>
-                  <pre className="text-xs bg-gray-900 text-gray-100 p-2 rounded overflow-x-auto max-h-40">
-                    <code>{component.code}</code>
+                  <pre className="text-xs bg-gray-900 text-gray-100 p-2 rounded overflow-x-auto max-h-20">
+                    <code>{component.code.substring(0, 200)}...</code>
                   </pre>
                 </div>
               ))
             )}
           </div>
+        )}
+
+        {/* Component Viewer Modal */}
+        {selectedComponent && (
+          <ComponentViewer
+            component={selectedComponent}
+            onClose={() => setSelectedComponent(null)}
+            onUpdate={() => loadComponents()}
+          />
         )}
       </div>
     </div>

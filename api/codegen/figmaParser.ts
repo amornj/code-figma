@@ -1,0 +1,158 @@
+/**
+ * Figma Parser - Extracts and structures Figma design data
+ */
+
+export interface FigmaNode {
+  id: string
+  name: string
+  type: string
+  visible?: boolean
+  children?: FigmaNode[]
+
+  // Layout
+  absoluteBoundingBox?: {
+    x: number
+    y: number
+    width: number
+    height: number
+  }
+
+  // Auto Layout
+  layoutMode?: 'HORIZONTAL' | 'VERTICAL' | 'NONE'
+  primaryAxisSizingMode?: 'FIXED' | 'AUTO'
+  counterAxisSizingMode?: 'FIXED' | 'AUTO'
+  primaryAxisAlignItems?: 'MIN' | 'CENTER' | 'MAX' | 'SPACE_BETWEEN'
+  counterAxisAlignItems?: 'MIN' | 'CENTER' | 'MAX'
+  paddingLeft?: number
+  paddingRight?: number
+  paddingTop?: number
+  paddingBottom?: number
+  itemSpacing?: number
+
+  // Styles
+  fills?: Array<{
+    type: string
+    color?: {
+      r: number
+      g: number
+      b: number
+      a: number
+    }
+  }>
+  strokes?: Array<any>
+  strokeWeight?: number
+  cornerRadius?: number
+
+  // Text
+  characters?: string
+  style?: {
+    fontFamily?: string
+    fontWeight?: number
+    fontSize?: number
+    letterSpacing?: number
+    lineHeightPx?: number
+    textAlignHorizontal?: 'LEFT' | 'CENTER' | 'RIGHT'
+  }
+
+  // Effects
+  effects?: Array<{
+    type: string
+    radius?: number
+    color?: any
+    offset?: { x: number; y: number }
+  }>
+}
+
+export interface ParsedComponent {
+  name: string
+  node: FigmaNode
+  type: 'FRAME' | 'COMPONENT' | 'TEXT' | 'RECTANGLE' | 'OTHER'
+}
+
+/**
+ * Extract all frames and components from Figma document
+ */
+export function extractFrames(documentNode: FigmaNode): ParsedComponent[] {
+  const frames: ParsedComponent[] = []
+
+  function traverse(node: FigmaNode) {
+    // Skip invisible nodes
+    if (node.visible === false) return
+
+    // Extract frames and components
+    if (node.type === 'FRAME' || node.type === 'COMPONENT') {
+      frames.push({
+        name: node.name,
+        node,
+        type: node.type as 'FRAME' | 'COMPONENT',
+      })
+    }
+
+    // Traverse children
+    if (node.children) {
+      node.children.forEach(traverse)
+    }
+  }
+
+  traverse(documentNode)
+  return frames
+}
+
+/**
+ * Get color as hex string
+ */
+export function rgbaToHex(r: number, g: number, b: number, a: number = 1): string {
+  const toHex = (n: number) => {
+    const hex = Math.round(n * 255).toString(16)
+    return hex.length === 1 ? '0' + hex : hex
+  }
+
+  const hex = `#${toHex(r)}${toHex(g)}${toHex(b)}`
+
+  if (a < 1) {
+    return hex + toHex(a)
+  }
+
+  return hex
+}
+
+/**
+ * Sanitize component name for React
+ */
+export function sanitizeComponentName(name: string): string {
+  // Remove special characters, spaces
+  let sanitized = name
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .replace(/^\d/, 'Component$&') // Can't start with number
+
+  // Capitalize first letter
+  return sanitized.charAt(0).toUpperCase() + sanitized.slice(1)
+}
+
+/**
+ * Check if node has Auto Layout
+ */
+export function hasAutoLayout(node: FigmaNode): boolean {
+  return node.layoutMode === 'HORIZONTAL' || node.layoutMode === 'VERTICAL'
+}
+
+/**
+ * Get primary fill color
+ */
+export function getPrimaryFill(node: FigmaNode): string | null {
+  if (!node.fills || node.fills.length === 0) return null
+
+  const fill = node.fills[0]
+  if (fill.type !== 'SOLID' || !fill.color) return null
+
+  const { r, g, b, a } = fill.color
+  return rgbaToHex(r, g, b, a)
+}
+
+/**
+ * Flatten children into renderable array
+ */
+export function flattenChildren(node: FigmaNode): FigmaNode[] {
+  if (!node.children) return []
+  return node.children.filter(child => child.visible !== false)
+}

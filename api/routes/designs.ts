@@ -145,13 +145,51 @@ router.post('/:id/generate', async (req: AuthRequest, res) => {
       return res.status(404).json({ error: 'Design not found' })
     }
 
-    // TODO: Implement actual code generation in Phase 4
-    // For now, return placeholder
+    // Import code generation module
+    const { generateCodeFromDesign } = await import('../codegen/index.js')
+
+    // Generate code
+    const result = await generateCodeFromDesign(id)
+
     res.json({
-      message: 'Code generation not yet implemented',
-      designId: id,
-      status: 'pending',
+      message: 'Code generated successfully',
+      result,
     })
+  } catch (error: any) {
+    console.error('Code generation error:', error)
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// GET /api/designs/:id/components - Get generated components for a design
+router.get('/:id/components', async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params
+
+    // Verify ownership
+    const { data: design } = await supabaseAdmin
+      .from('figma_designs')
+      .select(`
+        id,
+        projects!inner(user_id)
+      `)
+      .eq('id', id)
+      .single()
+
+    if (!design || design.projects.user_id !== req.user!.id) {
+      return res.status(404).json({ error: 'Design not found' })
+    }
+
+    // Get components
+    const { data: components, error } = await supabaseAdmin
+      .from('components')
+      .select('*')
+      .eq('figma_design_id', id)
+      .order('created_at', { ascending: true })
+
+    if (error) throw error
+
+    res.json({ components })
   } catch (error: any) {
     res.status(500).json({ error: error.message })
   }

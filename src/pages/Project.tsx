@@ -4,7 +4,8 @@ import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { Project as ProjectType } from '@/types'
 import { useFigmaDesigns, useImportFigmaDesign, useDeleteFigmaDesign } from '@/hooks/useFigmaDesigns'
-import { ArrowLeft, Plus, Trash2, ExternalLink, Image as ImageIcon } from 'lucide-react'
+import { ArrowLeft, Plus, Image as ImageIcon } from 'lucide-react'
+import DesignCard from '@/components/DesignCard'
 
 export default function Project() {
   const { id } = useParams<{ id: string }>()
@@ -104,53 +105,11 @@ export default function Project() {
         ) : designs && designs.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {designs.map((design) => (
-              <div
+              <DesignCard
                 key={design.id}
-                className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow overflow-hidden"
-              >
-                {/* Design Thumbnail */}
-                <div className="aspect-video bg-gray-100 relative">
-                  {design.thumbnail_url ? (
-                    <img
-                      src={design.thumbnail_url}
-                      alt={design.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <ImageIcon className="text-gray-400" size={48} />
-                    </div>
-                  )}
-                </div>
-
-                {/* Design Info */}
-                <div className="p-4">
-                  <h3 className="font-semibold text-lg text-gray-900 mb-2">
-                    {design.name}
-                  </h3>
-                  <div className="flex items-center justify-between">
-                    <a
-                      href={`https://www.figma.com/file/${design.figma_file_key}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
-                    >
-                      <ExternalLink size={14} />
-                      Open in Figma
-                    </a>
-                    <button
-                      onClick={() => {
-                        if (confirm('Delete this design?')) {
-                          deleteDesign.mutate(design.id)
-                        }
-                      }}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-              </div>
+                design={design}
+                onDelete={(id) => deleteDesign.mutate(id)}
+              />
             ))}
           </div>
         ) : (

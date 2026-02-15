@@ -227,18 +227,51 @@ Delete a Figma design.
 
 **POST** `/api/designs/:id/generate`
 
-Trigger code generation from design.
+Trigger code generation from design. Extracts all frames and generates React + Tailwind components.
 
 **Response:**
 ```json
 {
-  "message": "Code generation not yet implemented",
-  "designId": "uuid",
-  "status": "pending"
+  "message": "Code generated successfully",
+  "result": {
+    "designId": "uuid",
+    "components": [
+      {
+        "id": "uuid",
+        "name": "HomePage",
+        "code": "import React from 'react'..."
+      }
+    ],
+    "stats": {
+      "framesFound": 3,
+      "componentsGenerated": 3
+    }
+  }
 }
 ```
 
-_Note: Full implementation in Phase 4_
+#### Get Design Components
+
+**GET** `/api/designs/:id/components`
+
+Get all generated components for a design.
+
+**Response:**
+```json
+{
+  "components": [
+    {
+      "id": "uuid",
+      "figma_design_id": "uuid",
+      "name": "HomePage",
+      "code": "import React from 'react'...",
+      "language": "tsx",
+      "created_at": "2026-02-15T...",
+      "updated_at": "2026-02-15T..."
+    }
+  ]
+}
+```
 
 ---
 

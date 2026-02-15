@@ -1,7 +1,20 @@
 # Code-Figma: Figma Design to Code Webapp
 
 ## Project Vision
-A web application that bridges the gap between Figma designs and functional code. Users can import Figma designs, view them alongside their generated code, edit designs via a chatbox interface, combine multiple designs into complete applications, and add custom functionality. Eventually will be packaged as a mobile app using Capacitor.
+A powerful platform that bridges the gap between Figma designs and functional code. Users can import Figma designs, view them alongside their generated code, edit designs through multiple interfaces (Web UI, Terminal CLI, or Claude Desktop with MCP), combine multiple designs into complete applications, and add custom functionality.
+
+### Multiple Interfaces, Single Codebase
+The app provides three ways to interact with your projects:
+1. **Web UI** - Visual interface for viewing, browsing, and managing projects
+2. **Terminal/CLI** - Command-line tools for scriptable workflows (future)
+3. **Claude Desktop + MCP** - AI-powered natural language editing using your existing Claude Max subscription
+
+All interfaces talk to the same REST API and database, ensuring consistency and flexibility.
+
+### Cost-Effective AI Integration
+Instead of paying for additional AI API access (OpenAI, Anthropic), the app integrates with Claude Desktop via Model Context Protocol (MCP). Users leverage their existing Claude Max subscription for unlimited AI-powered editing, saving significant monthly costs while maintaining powerful AI capabilities.
+
+Eventually will be packaged as a mobile app using Capacitor.
 
 ## Tech Stack
 
@@ -51,14 +64,18 @@ A web application that bridges the gap between Figma designs and functional code
 - Toggle between design-only, code-only, or split view
 - Real-time code updates reflected in preview
 
-### 4. AI-Powered Design Editing
-- Chatbox interface for editing designs
-- Natural language commands like:
+### 4. AI-Powered Design Editing (via Claude Desktop + MCP)
+- Natural language editing through Claude Desktop terminal
+- No additional AI API costs - uses existing Claude Max subscription
+- Commands like:
   - "Change the button color to blue"
   - "Make the heading larger"
   - "Add padding to the card"
-- AI interprets intent and modifies code
-- Updates reflected in both code and preview
+  - "Generate a product card from frame 3"
+  - "Create a login form like the signup form"
+- Claude interprets intent and modifies code via MCP server
+- Updates reflected in database and visible in web UI
+- Full conversation context and project awareness
 
 ### 5. Project Composition
 - Combine multiple Figma designs into one project
@@ -201,58 +218,107 @@ code-figma/
 
 ## Development Phases
 
-### Phase 1: Foundation (MVP)
-- [ ] Set up Vite + React + TypeScript + Tailwind
-- [ ] Install and configure Supabase client
-- [ ] Set up Supabase database tables and RLS policies
-- [ ] Implement authentication (login, signup, logout)
-- [ ] Create basic routing structure
-- [ ] Build dashboard for project management (CRUD)
+### Phase 1: Foundation ✅ COMPLETE
+- [x] Set up Vite + React + TypeScript + Tailwind
+- [x] Install and configure Supabase client
+- [x] Set up Supabase database tables and RLS policies
+- [x] Implement authentication (login, signup, logout)
+- [x] Create basic routing structure
+- [x] Build dashboard for project management (CRUD)
 
-### Phase 2: Figma Integration
-- [ ] Create Figma API client module
-- [ ] Implement Figma file URL parsing
-- [ ] Fetch and display Figma design metadata
-- [ ] Store Figma design data in Supabase
-- [ ] Display design thumbnails/previews
+### Phase 2: Figma Integration ✅ COMPLETE
+- [x] Create Figma API client module
+- [x] Implement Figma file URL parsing
+- [x] Fetch and display Figma design metadata
+- [x] Store Figma design data in Supabase
+- [x] Display design thumbnails/previews
+- [x] Delete imported designs
+- [x] Link to Figma files
 
-### Phase 3: Code Generation
+### Phase 3: REST API Layer 🔄 IN PROGRESS
+**Purpose:** Expose app functionality via REST API for multiple interfaces (Web UI, CLI, MCP)
+
+**API Endpoints to Build:**
+- [ ] Projects API (CRUD operations)
+- [ ] Figma Designs API (import, list, delete)
+- [ ] Components API (CRUD for generated code)
+- [ ] Custom Code API (CRUD for user files)
+- [ ] Code Generation API (trigger generation, get status)
+
+**Technical Details:**
+- [ ] Set up API routes (using Vite backend or separate Express server)
+- [ ] Authentication middleware (Supabase JWT validation)
+- [ ] Rate limiting and security
+- [ ] API documentation (OpenAPI/Swagger)
+- [ ] CORS configuration for web UI
+- [ ] Error handling and validation
+
+### Phase 4: Code Generation Engine
 - [ ] Build Figma AST parser
 - [ ] Implement code generator (Figma nodes → React + Tailwind)
 - [ ] Handle layouts (Auto Layout → Flexbox/Grid)
 - [ ] Handle typography and colors
 - [ ] Generate component files
 - [ ] Store generated code in Supabase
+- [ ] API endpoint for triggering generation
+- [ ] Background job processing for large designs
 
-### Phase 4: Editor & Viewer
-- [ ] Integrate Monaco Editor
+### Phase 5: MCP Server (Claude Desktop Integration)
+**Purpose:** Enable AI-powered editing via Claude Desktop using Model Context Protocol
+
+**MCP Server Features:**
+- [ ] Create `code-figma-mcp` package
+- [ ] Implement MCP tools:
+  - [ ] `list_projects` - List all user projects
+  - [ ] `get_project` - Get project details
+  - [ ] `import_figma_design` - Import design from URL
+  - [ ] `list_designs` - List designs in project
+  - [ ] `generate_code` - Generate code from design
+  - [ ] `get_component` - Get generated component code
+  - [ ] `update_component` - Modify component code
+  - [ ] `create_custom_code` - Add custom code file
+- [ ] Authentication with Supabase
+- [ ] Connect to REST API
+- [ ] Configuration for Claude Desktop
+- [ ] Documentation and setup guide
+
+**Claude Desktop Setup:**
+- [ ] Add MCP server to Claude Desktop config
+- [ ] Test tools in Claude Desktop terminal
+- [ ] Create example prompts/workflows
+- [ ] User guide for natural language editing
+
+### Phase 6: Editor & Viewer (Web UI Enhancement)
+- [ ] Integrate Monaco Editor for code viewing/editing
 - [ ] Build design viewer (iframe or render component)
 - [ ] Implement split-pane layout with toggle
 - [ ] Real-time code preview updates
 - [ ] Syntax highlighting and code formatting
+- [ ] Component diff view (Figma vs generated)
 
-### Phase 5: AI Chatbox
-- [ ] Design chatbox UI
-- [ ] Integrate AI API (Claude, GPT-4, or local model)
-- [ ] Build prompt engineering for design editing
-- [ ] Implement code modification based on chat commands
-- [ ] Update preview on changes
-
-### Phase 6: Project Composition
+### Phase 7: Project Composition
 - [ ] Multi-component project structure
 - [ ] Component composition UI
 - [ ] Navigation/routing between screens
-- [ ] Add custom code files
+- [ ] Add custom code files via web UI
 - [ ] Integrate custom functionality (API calls, state, etc.)
+- [ ] Project export (download as ZIP)
 
-### Phase 7: Polish & Optimization
+### Phase 8: Polish & Optimization
 - [ ] Error handling and validation
 - [ ] Loading states and skeletons
 - [ ] Responsive design
 - [ ] Performance optimization
 - [ ] Testing (unit, integration)
+- [ ] Analytics and monitoring
 
-### Phase 8: Capacitor Integration
+### Phase 9: CLI Tool (Optional)
+- [ ] Build command-line interface
+- [ ] Commands: `code-figma import <url>`, `code-figma generate`, etc.
+- [ ] Uses same REST API as MCP and web UI
+- [ ] Scriptable workflows
+
+### Phase 10: Capacitor Integration
 - [ ] Install Capacitor
 - [ ] Configure iOS and Android projects
 - [ ] Test on mobile devices
@@ -287,11 +353,103 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 # Figma
 VITE_FIGMA_ACCESS_TOKEN=your_figma_token
 
-# AI (Optional, for chatbox feature)
-VITE_OPENAI_API_KEY=your_openai_key
-# or
-VITE_ANTHROPIC_API_KEY=your_anthropic_key
+# No AI API keys needed!
+# We use Claude Desktop + MCP instead, which uses your existing
+# Claude Max subscription - no additional costs!
 ```
+
+## Architecture: API-First, Multiple Interfaces
+
+### System Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│                  User Interfaces                     │
+├─────────────────────────────────────────────────────┤
+│                                                      │
+│  🌐 Web UI          💻 Terminal/CLI    🤖 Claude    │
+│  (Browser)          (Future)            Desktop      │
+│                                         (MCP)        │
+│                                                      │
+└────────────┬────────────────┬───────────────────────┘
+             │                │
+             │                │
+             ▼                ▼
+┌─────────────────────────────────────────────────────┐
+│                   REST API Layer                     │
+│          (Express or Vite API Routes)                │
+├─────────────────────────────────────────────────────┤
+│  • Authentication (Supabase JWT)                     │
+│  • Projects CRUD                                     │
+│  • Figma Designs CRUD                                │
+│  • Components CRUD                                   │
+│  • Code Generation                                   │
+│  • Custom Code Management                            │
+└────────────┬───────────────┬────────────────────────┘
+             │               │
+             ▼               ▼
+    ┌────────────────┐  ┌──────────────┐
+    │   Supabase     │  │  Figma API   │
+    │   (Database    │  │  (Designs)   │
+    │   + Auth)      │  │              │
+    └────────────────┘  └──────────────┘
+```
+
+### Interface Comparison
+
+| Feature | Web UI | Terminal/CLI | Claude Desktop |
+|---------|--------|--------------|----------------|
+| **View Projects** | ✅ Visual cards | ✅ List view | ✅ Ask Claude |
+| **Import Figma** | ✅ Form input | ✅ Command | ✅ "Import X" |
+| **View Code** | ✅ Monaco editor | ✅ Cat/less | ✅ Show me code |
+| **Edit Code** | ✅ Monaco editor | ✅ Vim/nano | ✅ Natural language |
+| **Generate Code** | ✅ Button click | ✅ Command | ✅ "Generate..." |
+| **Speed** | Medium | Fast | Fastest |
+| **Visual Feedback** | ✅ Best | ❌ None | ⚠️ Via web UI |
+| **Bulk Operations** | ❌ Manual | ✅ Scripts | ✅ One command |
+| **AI Editing** | ❌ (would need API) | ❌ | ✅ Built-in |
+| **Learning Curve** | Low | Medium | Low |
+
+### Single Codebase Benefits
+
+**One database, one API, multiple interfaces:**
+- Changes in Claude Desktop → visible in Web UI
+- Import in Web UI → accessible via CLI
+- Generate in Terminal → stored in database
+- No data sync issues
+- Consistent business logic
+- Easy to maintain
+
+### MCP Integration Benefits
+
+**Why MCP instead of traditional chatbox:**
+1. **No AI API costs** - Use existing Claude Max subscription
+2. **Better context** - Claude Desktop maintains full conversation history
+3. **More powerful** - Access to latest Claude models (4.5, 4.6)
+4. **Tool ecosystem** - Can combine with other MCP tools
+5. **Terminal workflow** - Familiar for developers
+6. **Scriptable** - Can automate with Alfred, Raycast, etc.
+
+### Example Workflows
+
+**Scenario: Import and generate code**
+
+**Web UI:**
+1. Click "Import Figma Design"
+2. Paste URL
+3. Click "Import"
+4. Wait for thumbnail
+5. Click design card
+6. Click "Generate Code"
+7. View in editor
+
+**Claude Desktop:**
+```
+You: "Import DogFoodSheltie design and generate code"
+Claude: ✅ Done! Generated 3 components.
+```
+
+**Both end up in the same database!**
 
 ## Key Architectural Decisions
 

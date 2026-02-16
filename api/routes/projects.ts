@@ -1,6 +1,5 @@
 import express from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth.js'
-import { supabaseAdmin } from '../utils/supabase.js'
 
 const router = express.Router()
 
@@ -10,10 +9,10 @@ router.use(authMiddleware)
 // GET /api/projects - List all projects for authenticated user
 router.get('/', async (req: AuthRequest, res) => {
   try {
-    const { data, error } = await supabaseAdmin
+    const db = req.supabase!
+    const { data, error } = await db
       .from('projects')
       .select('*')
-      .eq('user_id', req.user!.id)
       .order('created_at', { ascending: false })
 
     if (error) throw error
@@ -28,16 +27,17 @@ router.get('/', async (req: AuthRequest, res) => {
 router.get('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params
+    const db = req.supabase!
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
       .from('projects')
       .select('*')
       .eq('id', id)
-      .eq('user_id', req.user!.id)
       .single()
 
-    if (error) throw error
-    if (!data) return res.status(404).json({ error: 'Project not found' })
+    if (error || !data) {
+      return res.status(404).json({ error: 'Project not found' })
+    }
 
     res.json({ project: data })
   } catch (error: any) {
@@ -49,12 +49,13 @@ router.get('/:id', async (req: AuthRequest, res) => {
 router.post('/', async (req: AuthRequest, res) => {
   try {
     const { name, description } = req.body
+    const db = req.supabase!
 
     if (!name) {
       return res.status(400).json({ error: 'Project name is required' })
     }
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
       .from('projects')
       .insert([{
         user_id: req.user!.id,
@@ -77,17 +78,18 @@ router.put('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params
     const { name, description } = req.body
+    const db = req.supabase!
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
       .from('projects')
       .update({ name, description })
       .eq('id', id)
-      .eq('user_id', req.user!.id)
       .select()
       .single()
 
-    if (error) throw error
-    if (!data) return res.status(404).json({ error: 'Project not found' })
+    if (error || !data) {
+      return res.status(404).json({ error: 'Project not found' })
+    }
 
     res.json({ project: data })
   } catch (error: any) {
@@ -99,12 +101,12 @@ router.put('/:id', async (req: AuthRequest, res) => {
 router.delete('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params
+    const db = req.supabase!
 
-    const { error } = await supabaseAdmin
+    const { error } = await db
       .from('projects')
       .delete()
       .eq('id', id)
-      .eq('user_id', req.user!.id)
 
     if (error) throw error
 
@@ -118,20 +120,20 @@ router.delete('/:id', async (req: AuthRequest, res) => {
 router.get('/:id/designs', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params
+    const db = req.supabase!
 
-    // First verify user owns the project
-    const { data: project } = await supabaseAdmin
+    // Verify user owns the project (RLS handles this)
+    const { data: project } = await db
       .from('projects')
       .select('id')
       .eq('id', id)
-      .eq('user_id', req.user!.id)
       .single()
 
     if (!project) {
       return res.status(404).json({ error: 'Project not found' })
     }
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
       .from('figma_designs')
       .select('*')
       .eq('project_id', id)

@@ -1,6 +1,5 @@
 import express from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth.js'
-import { supabaseAdmin } from '../utils/supabase.js'
 
 const router = express.Router()
 
@@ -10,21 +9,16 @@ router.use(authMiddleware)
 router.get('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params
+    const db = req.supabase!
 
-    const { data, error } = await supabaseAdmin
+    // RLS ensures user can only see components linked to their designs/projects
+    const { data, error } = await db
       .from('components')
-      .select(`
-        *,
-        figma_designs!inner(
-          id,
-          projects!inner(user_id)
-        )
-      `)
+      .select('*')
       .eq('id', id)
       .single()
 
-    if (error) throw error
-    if (!data || data.figma_designs.projects.user_id !== req.user!.id) {
+    if (error || !data) {
       return res.status(404).json({ error: 'Component not found' })
     }
 
@@ -39,32 +33,22 @@ router.put('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params
     const { code, name } = req.body
+    const db = req.supabase!
 
-    // Verify ownership
-    const { data: component } = await supabaseAdmin
+    const updateFields: Record<string, any> = {}
+    if (code !== undefined) updateFields.code = code
+    if (name !== undefined) updateFields.name = name
+
+    const { data, error } = await db
       .from('components')
-      .select(`
-        id,
-        figma_designs!inner(
-          id,
-          projects!inner(user_id)
-        )
-      `)
-      .eq('id', id)
-      .single()
-
-    if (!component || component.figma_designs.projects.user_id !== req.user!.id) {
-      return res.status(404).json({ error: 'Component not found' })
-    }
-
-    const { data, error } = await supabaseAdmin
-      .from('components')
-      .update({ code, name })
+      .update(updateFields)
       .eq('id', id)
       .select()
       .single()
 
-    if (error) throw error
+    if (error || !data) {
+      return res.status(404).json({ error: 'Component not found' })
+    }
 
     res.json({ component: data })
   } catch (error: any) {
@@ -76,25 +60,9 @@ router.put('/:id', async (req: AuthRequest, res) => {
 router.delete('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params
+    const db = req.supabase!
 
-    // Verify ownership
-    const { data: component } = await supabaseAdmin
-      .from('components')
-      .select(`
-        id,
-        figma_designs!inner(
-          id,
-          projects!inner(user_id)
-        )
-      `)
-      .eq('id', id)
-      .single()
-
-    if (!component || component.figma_designs.projects.user_id !== req.user!.id) {
-      return res.status(404).json({ error: 'Component not found' })
-    }
-
-    const { error } = await supabaseAdmin
+    const { error } = await db
       .from('components')
       .delete()
       .eq('id', id)

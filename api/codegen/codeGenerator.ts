@@ -44,7 +44,7 @@ function generateJSX(node: FigmaNode, depth: number = 0): string {
   // Handle different node types
   switch (node.type) {
     case 'TEXT':
-      return `<div${className}>${escapeHtml(node.characters || '')}</div>`
+      return `<p${className}>${escapeJsx(node.characters || '')}</p>`
 
     case 'RECTANGLE':
     case 'ELLIPSE':
@@ -91,15 +91,14 @@ function indent(str: string, spaces: number): string {
 }
 
 /**
- * Escape HTML special characters
+ * Escape text for use in JSX
  */
-function escapeHtml(text: string): string {
+function escapeJsx(text: string): string {
   return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;')
+    .replace(/\{/g, "{'{'}")
+    .replace(/\}/g, "{'}'}")
+    .replace(/</g, "{'<'}")
+    .replace(/>/g, "{'>'}")
 }
 
 /**

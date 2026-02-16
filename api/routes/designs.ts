@@ -1,6 +1,5 @@
 import express from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth.js'
-import { supabaseAdmin } from '../utils/supabase.js'
 import axios from 'axios'
 
 const router = express.Router()
@@ -13,34 +12,45 @@ router.use(authMiddleware)
 router.post('/import', async (req: AuthRequest, res) => {
   try {
     const { projectId, figmaUrl } = req.body
+    const db = req.supabase!
 
     if (!projectId || !figmaUrl) {
       return res.status(400).json({ error: 'projectId and figmaUrl are required' })
     }
 
-    // Verify user owns the project
-    const { data: project } = await supabaseAdmin
+    if (!FIGMA_TOKEN) {
+      return res.status(500).json({ error: 'Figma API token not configured on server' })
+    }
+
+    // Verify user owns the project (RLS ensures only user's projects are visible)
+    const { data: project, error: projectError } = await db
       .from('projects')
       .select('id')
       .eq('id', projectId)
-      .eq('user_id', req.user!.id)
       .single()
 
-    if (!project) {
+    if (projectError || !project) {
       return res.status(404).json({ error: 'Project not found' })
     }
 
-    // Parse Figma URL
-    const urlMatch = figmaUrl.match(/\/(file|design)\/([a-zA-Z0-9]+)/)
+    // Parse Figma URL - handle /file/, /design/, and /proto/ patterns
+    const urlMatch = figmaUrl.match(/\/(file|design|proto)\/([a-zA-Z0-9]+)/)
     if (!urlMatch) {
-      return res.status(400).json({ error: 'Invalid Figma URL' })
+      return res.status(400).json({ error: 'Invalid Figma URL. Expected format: https://www.figma.com/design/FILE_KEY/...' })
     }
 
     const fileKey = urlMatch[2]
-    const nodeId = new URL(figmaUrl).searchParams.get('node-id') || null
 
-    // Check if design already exists
-    const { data: existing, error: existingError } = await supabaseAdmin
+    // Parse node-id from URL if present
+    let nodeId: string | null = null
+    try {
+      nodeId = new URL(figmaUrl).searchParams.get('node-id') || null
+    } catch {
+      // URL parsing failed, skip node-id extraction
+    }
+
+    // Check if design already exists for this project
+    const { data: existing } = await db
       .from('figma_designs')
       .select('id')
       .eq('project_id', projectId)
@@ -48,22 +58,41 @@ router.post('/import', async (req: AuthRequest, res) => {
       .maybeSingle()
 
     if (existing) {
-      return res.status(409).json({ error: 'Design already imported for this project' })
+      return res.status(409).json({ error: 'This design has already been imported to this project' })
     }
 
     // Fetch from Figma API
-    const response = await axios.get(`${FIGMA_API_BASE}/files/${fileKey}`, {
-      headers: { 'X-Figma-Token': FIGMA_TOKEN },
-    })
-
-    const fileData = response.data
+    let fileData: any
+    try {
+      const response = await axios.get(`${FIGMA_API_BASE}/files/${fileKey}`, {
+        headers: { 'X-Figma-Token': FIGMA_TOKEN },
+        timeout: 30000,
+      })
+      fileData = response.data
+    } catch (figmaError: any) {
+      if (figmaError.response?.status === 429) {
+        const retryAfter = figmaError.response.headers['retry-after']
+        const waitMinutes = retryAfter ? Math.ceil(Number(retryAfter) / 60) : 'a few'
+        return res.status(429).json({
+          error: `Figma API rate limit reached. Please wait ${waitMinutes} minutes and try again.`,
+          retryAfter: retryAfter ? Number(retryAfter) : undefined,
+        })
+      }
+      if (figmaError.response?.status === 403) {
+        return res.status(403).json({ error: 'Access denied. Check that your Figma token has access to this file.' })
+      }
+      if (figmaError.response?.status === 404) {
+        return res.status(404).json({ error: 'Figma file not found. Check the URL and try again.' })
+      }
+      throw figmaError
+    }
 
     // Insert into database
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
       .from('figma_designs')
       .insert([{
         project_id: projectId,
-        name: fileData.name,
+        name: fileData.name || 'Untitled Design',
         figma_file_key: fileKey,
         figma_node_id: nodeId,
         thumbnail_url: fileData.thumbnailUrl || null,
@@ -72,20 +101,15 @@ router.post('/import', async (req: AuthRequest, res) => {
       .select()
       .single()
 
-    if (error) throw error
+    if (error) {
+      console.error('Supabase insert error:', error)
+      throw new Error('Failed to save design to database')
+    }
 
     res.status(201).json({ design: data })
   } catch (error: any) {
     console.error('Import error:', error.response?.data || error.message)
-
-    // Handle Figma API rate limiting
-    if (error.response?.status === 429) {
-      return res.status(429).json({
-        error: 'Figma API rate limit reached. Please wait a few minutes and try again.'
-      })
-    }
-
-    res.status(500).json({ error: error.message })
+    res.status(500).json({ error: error.message || 'Failed to import design' })
   }
 })
 
@@ -93,18 +117,16 @@ router.post('/import', async (req: AuthRequest, res) => {
 router.get('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params
+    const db = req.supabase!
 
-    const { data, error } = await supabaseAdmin
+    // RLS ensures only the user's designs (via project ownership) are visible
+    const { data, error } = await db
       .from('figma_designs')
-      .select(`
-        *,
-        projects!inner(user_id)
-      `)
+      .select('*')
       .eq('id', id)
       .single()
 
-    if (error) throw error
-    if (!data || data.projects.user_id !== req.user!.id) {
+    if (error || !data) {
       return res.status(404).json({ error: 'Design not found' })
     }
 
@@ -118,22 +140,20 @@ router.get('/:id', async (req: AuthRequest, res) => {
 router.delete('/:id', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params
+    const db = req.supabase!
 
-    // Verify ownership through project
-    const { data: design } = await supabaseAdmin
+    // First check it exists (RLS handles ownership)
+    const { data: design } = await db
       .from('figma_designs')
-      .select(`
-        id,
-        projects!inner(user_id)
-      `)
+      .select('id')
       .eq('id', id)
       .single()
 
-    if (!design || design.projects.user_id !== req.user!.id) {
+    if (!design) {
       return res.status(404).json({ error: 'Design not found' })
     }
 
-    const { error } = await supabaseAdmin
+    const { error } = await db
       .from('figma_designs')
       .delete()
       .eq('id', id)
@@ -150,26 +170,29 @@ router.delete('/:id', async (req: AuthRequest, res) => {
 router.post('/:id/generate', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params
+    const db = req.supabase!
 
-    // Verify ownership
-    const { data: design } = await supabaseAdmin
+    // Verify design exists and user has access (RLS)
+    const { data: design, error: designError } = await db
       .from('figma_designs')
-      .select(`
-        *,
-        projects!inner(user_id)
-      `)
+      .select('*')
       .eq('id', id)
       .single()
 
-    if (!design || design.projects.user_id !== req.user!.id) {
+    if (designError || !design) {
       return res.status(404).json({ error: 'Design not found' })
+    }
+
+    // Check if figma_data exists
+    if (!design.figma_data || !design.figma_data.document) {
+      return res.status(400).json({ error: 'Design has no Figma data. Try re-importing it.' })
     }
 
     // Import code generation module
     const { generateCodeFromDesign } = await import('../codegen/index.js')
 
-    // Generate code
-    const result = await generateCodeFromDesign(id)
+    // Generate code (pass the user's supabase client for DB operations)
+    const result = await generateCodeFromDesign(id, db)
 
     res.json({
       message: 'Code generated successfully',
@@ -185,23 +208,21 @@ router.post('/:id/generate', async (req: AuthRequest, res) => {
 router.get('/:id/components', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params
+    const db = req.supabase!
 
-    // Verify ownership
-    const { data: design } = await supabaseAdmin
+    // Verify design exists (RLS handles ownership)
+    const { data: design } = await db
       .from('figma_designs')
-      .select(`
-        id,
-        projects!inner(user_id)
-      `)
+      .select('id')
       .eq('id', id)
       .single()
 
-    if (!design || design.projects.user_id !== req.user!.id) {
+    if (!design) {
       return res.status(404).json({ error: 'Design not found' })
     }
 
     // Get components
-    const { data: components, error } = await supabaseAdmin
+    const { data: components, error } = await db
       .from('components')
       .select('*')
       .eq('figma_design_id', id)
@@ -209,7 +230,7 @@ router.get('/:id/components', async (req: AuthRequest, res) => {
 
     if (error) throw error
 
-    res.json({ components })
+    res.json({ components: components || [] })
   } catch (error: any) {
     res.status(500).json({ error: error.message })
   }

@@ -1,11 +1,14 @@
 import { Request, Response, NextFunction } from 'express'
-import { supabaseAdmin } from '../utils/supabase.js'
+import { SupabaseClient } from '@supabase/supabase-js'
+import { supabaseAdmin, createUserClient } from '../utils/supabase.js'
 
 export interface AuthRequest extends Request {
   user?: {
     id: string
     email: string
   }
+  supabase?: SupabaseClient
+  accessToken?: string
 }
 
 export async function authMiddleware(
@@ -29,11 +32,13 @@ export async function authMiddleware(
       return res.status(401).json({ error: 'Invalid or expired token' })
     }
 
-    // Attach user to request
+    // Attach user info and a user-scoped Supabase client to the request
     req.user = {
       id: data.user.id,
       email: data.user.email!,
     }
+    req.accessToken = token
+    req.supabase = createUserClient(token)
 
     next()
   } catch (error) {

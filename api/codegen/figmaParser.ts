@@ -70,16 +70,14 @@ export interface ParsedComponent {
 }
 
 /**
- * Extract all frames and components from Figma document
+ * Extract all frames and components from Figma document (recursive - may include duplicates)
  */
 export function extractFrames(documentNode: FigmaNode): ParsedComponent[] {
   const frames: ParsedComponent[] = []
 
   function traverse(node: FigmaNode) {
-    // Skip invisible nodes
     if (node.visible === false) return
 
-    // Extract frames and components
     if (node.type === 'FRAME' || node.type === 'COMPONENT') {
       frames.push({
         name: node.name,
@@ -88,13 +86,55 @@ export function extractFrames(documentNode: FigmaNode): ParsedComponent[] {
       })
     }
 
-    // Traverse children
     if (node.children) {
       node.children.forEach(traverse)
     }
   }
 
   traverse(documentNode)
+  return frames
+}
+
+/**
+ * Extract only top-level frames from Figma document.
+ * In Figma, the document has pages (CANVAS nodes), and each page has top-level frames.
+ * We only want these top-level frames to avoid generating duplicate components
+ * for frames nested inside other frames.
+ */
+export function extractTopLevelFrames(documentNode: FigmaNode): ParsedComponent[] {
+  const frames: ParsedComponent[] = []
+
+  // Figma structure: DOCUMENT -> CANVAS (pages) -> FRAME/COMPONENT (top-level)
+  const pages = documentNode.children || []
+
+  for (const page of pages) {
+    if (page.visible === false) continue
+    if (page.type !== 'CANVAS' && page.type !== 'PAGE') {
+      // If the document doesn't have canvas/page nodes, treat children as top-level
+      if (page.type === 'FRAME' || page.type === 'COMPONENT' || page.type === 'COMPONENT_SET') {
+        frames.push({
+          name: page.name,
+          node: page,
+          type: (page.type === 'COMPONENT_SET' ? 'COMPONENT' : page.type) as 'FRAME' | 'COMPONENT',
+        })
+      }
+      continue
+    }
+
+    // Get direct children of the page (top-level frames)
+    const children = page.children || []
+    for (const child of children) {
+      if (child.visible === false) continue
+      if (child.type === 'FRAME' || child.type === 'COMPONENT' || child.type === 'COMPONENT_SET' || child.type === 'INSTANCE') {
+        frames.push({
+          name: child.name,
+          node: child,
+          type: child.type === 'FRAME' || child.type === 'INSTANCE' ? 'FRAME' : 'COMPONENT',
+        })
+      }
+    }
+  }
+
   return frames
 }
 

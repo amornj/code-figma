@@ -42,12 +42,18 @@ export function mapStylesToTailwind(node: FigmaNode): string[] {
   const padding = mapPadding(node)
   classes.push(...padding)
 
-  // Background color
+  // Colors - text fills become text color, container fills become background
   if (node.fills && node.fills.length > 0) {
     const fill = node.fills[0]
     if (fill.type === 'SOLID' && fill.color) {
       const color = mapColorToTailwind(fill.color)
-      if (color) classes.push(`bg-${color}`)
+      if (color) {
+        if (node.type === 'TEXT') {
+          classes.push(`text-${color}`)
+        } else {
+          classes.push(`bg-${color}`)
+        }
+      }
     }
   }
 
@@ -267,13 +273,23 @@ function mapShadow(effects: any[]): string | null {
 }
 
 /**
- * Map sizing
+ * Map sizing - only add explicit sizes for nodes with fixed dimensions
  */
 function mapSizing(node: FigmaNode): string[] {
   const classes: string[] = []
 
-  // For now, use arbitrary values for specific sizes
-  // In production, you might want to map to Tailwind's scale
+  if (!node.absoluteBoundingBox) return classes
+
+  const { width, height } = node.absoluteBoundingBox
+
+  // Map common widths to Tailwind classes
+  if (node.primaryAxisSizingMode === 'FIXED' && width) {
+    if (width >= 1200) classes.push('max-w-7xl')
+    else if (width >= 1024) classes.push('max-w-6xl')
+    else if (width >= 768) classes.push('max-w-4xl')
+    else if (width >= 640) classes.push('max-w-2xl')
+    else if (width >= 384) classes.push('max-w-sm')
+  }
 
   return classes
 }

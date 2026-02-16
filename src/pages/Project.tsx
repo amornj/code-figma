@@ -35,9 +35,13 @@ export default function Project() {
     e.preventDefault()
     if (!figmaUrl.trim()) return
 
-    await importDesign.mutateAsync(figmaUrl)
-    setFigmaUrl('')
-    setShowImportModal(false)
+    try {
+      await importDesign.mutateAsync(figmaUrl)
+      setFigmaUrl('')
+      setShowImportModal(false)
+    } catch {
+      // Error is handled by the mutation's onError callback (shows toast)
+    }
   }
 
   if (projectLoading) {
@@ -148,7 +152,7 @@ export default function Project() {
                   value={figmaUrl}
                   onChange={(e) => setFigmaUrl(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="https://www.figma.com/file/..."
+                  placeholder="https://www.figma.com/design/..."
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Paste the URL from your Figma file's address bar

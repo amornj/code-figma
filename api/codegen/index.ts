@@ -2,8 +2,8 @@
  * Code Generation Orchestrator
  */
 
-import { supabaseAdmin } from '../utils/supabase.js'
-import { extractFrames, ParsedComponent } from './figmaParser.js'
+import { SupabaseClient } from '@supabase/supabase-js'
+import { extractTopLevelFrames } from './figmaParser.js'
 import { generateReactComponent, GeneratedComponent } from './codeGenerator.js'
 
 export interface GenerationResult {
@@ -20,11 +20,15 @@ export interface GenerationResult {
 }
 
 /**
- * Generate code from a Figma design
+ * Generate code from a Figma design.
+ * Accepts a user-scoped Supabase client to respect RLS policies.
  */
-export async function generateCodeFromDesign(designId: string): Promise<GenerationResult> {
+export async function generateCodeFromDesign(
+  designId: string,
+  db: SupabaseClient
+): Promise<GenerationResult> {
   // 1. Fetch design from database
-  const { data: design, error } = await supabaseAdmin
+  const { data: design, error } = await db
     .from('figma_designs')
     .select('*')
     .eq('id', designId)
@@ -42,30 +46,40 @@ export async function generateCodeFromDesign(designId: string): Promise<Generati
     throw new Error('No document node found in Figma data')
   }
 
-  const frames = extractFrames(documentNode)
+  // Extract only top-level frames (direct children of pages) to avoid duplicates
+  const frames = extractTopLevelFrames(documentNode)
 
   if (frames.length === 0) {
-    throw new Error('No frames found in design')
+    throw new Error('No frames or components found in design')
   }
 
-  // 3. Generate code for each frame
+  // 3. Delete existing components for this design before regenerating
+  await db
+    .from('components')
+    .delete()
+    .eq('figma_design_id', designId)
+
+  // 4. Generate code for each frame
   const generatedComponents: GeneratedComponent[] = []
 
   for (const frame of frames) {
     try {
       const component = generateReactComponent(frame.node)
       generatedComponents.push(component)
-    } catch (error) {
-      console.error(`Failed to generate component for frame: ${frame.name}`, error)
-      // Continue with other frames
+    } catch (err) {
+      console.error(`Failed to generate component for frame: ${frame.name}`, err)
     }
   }
 
-  // 4. Store components in database
+  if (generatedComponents.length === 0) {
+    throw new Error('Failed to generate any components from the design')
+  }
+
+  // 5. Store components in database
   const storedComponents = []
 
   for (const component of generatedComponents) {
-    const { data: stored, error } = await supabaseAdmin
+    const { data: stored, error: storeError } = await db
       .from('components')
       .insert([{
         figma_design_id: designId,
@@ -76,8 +90,8 @@ export async function generateCodeFromDesign(designId: string): Promise<Generati
       .select()
       .single()
 
-    if (error) {
-      console.error(`Failed to store component: ${component.name}`, error)
+    if (storeError) {
+      console.error(`Failed to store component: ${component.name}`, storeError)
       continue
     }
 
@@ -88,7 +102,6 @@ export async function generateCodeFromDesign(designId: string): Promise<Generati
     })
   }
 
-  // 5. Return result
   return {
     designId,
     components: storedComponents,
@@ -97,21 +110,4 @@ export async function generateCodeFromDesign(designId: string): Promise<Generati
       componentsGenerated: storedComponents.length,
     },
   }
-}
-
-/**
- * Get all components for a design
- */
-export async function getComponentsForDesign(designId: string) {
-  const { data, error } = await supabaseAdmin
-    .from('components')
-    .select('*')
-    .eq('figma_design_id', designId)
-    .order('created_at', { ascending: true })
-
-  if (error) {
-    throw new Error('Failed to fetch components')
-  }
-
-  return data
 }

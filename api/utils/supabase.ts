@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import dotenv from 'dotenv'
 
 dotenv.config()
@@ -10,5 +10,19 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables')
 }
 
-// Client for API server (uses anon key with RLS)
+// Admin client for auth verification only (no RLS context)
 export const supabaseAdmin = createClient(supabaseUrl, supabaseAnonKey)
+
+/**
+ * Create a Supabase client authenticated as a specific user.
+ * This client respects RLS policies because it carries the user's JWT.
+ */
+export function createUserClient(accessToken: string): SupabaseClient {
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    global: {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  })
+}

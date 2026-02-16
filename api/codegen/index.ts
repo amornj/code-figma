@@ -12,6 +12,7 @@ export interface GenerationResult {
     id: string
     name: string
     code: string
+    language: string
   }>
   stats: {
     framesFound: number
@@ -35,7 +36,10 @@ export async function generateCodeFromDesign(
     .single()
 
   if (error || !design) {
-    throw new Error('Design not found')
+    if (error) {
+      console.error('[Codegen] Design fetch error:', { message: error.message, code: error.code, details: error.details, hint: error.hint })
+    }
+    throw new Error(`Design not found (id: ${designId})`)
   }
 
   // 2. Extract frames from Figma data
@@ -54,10 +58,15 @@ export async function generateCodeFromDesign(
   }
 
   // 3. Delete existing components for this design before regenerating
-  await db
+  const { error: deleteError } = await db
     .from('components')
     .delete()
     .eq('figma_design_id', designId)
+
+  if (deleteError) {
+    console.error('[Codegen] Failed to delete existing components:', { message: deleteError.message, code: deleteError.code, details: deleteError.details })
+    // Non-fatal: continue with generation even if delete failed (might just mean no existing components)
+  }
 
   // 4. Generate code for each frame
   const generatedComponents: GeneratedComponent[] = []
@@ -91,7 +100,12 @@ export async function generateCodeFromDesign(
       .single()
 
     if (storeError) {
-      console.error(`Failed to store component: ${component.name}`, storeError)
+      console.error(`[Codegen] Failed to store component: ${component.name}`, {
+        message: storeError.message,
+        code: storeError.code,
+        details: storeError.details,
+        hint: storeError.hint,
+      })
       continue
     }
 
@@ -99,8 +113,11 @@ export async function generateCodeFromDesign(
       id: stored.id,
       name: stored.name,
       code: stored.code,
+      language: stored.language,
     })
   }
+
+  console.log(`[Codegen] Generated ${storedComponents.length}/${frames.length} components for design ${designId}`)
 
   return {
     designId,

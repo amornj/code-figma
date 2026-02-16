@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { FigmaDesign } from '@/types'
 import { ExternalLink, Trash2, Code, ChevronDown, ChevronUp, Eye } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { apiRequest } from '@/lib/api'
 import toast from 'react-hot-toast'
 import ComponentViewer from './ComponentViewer'
 
@@ -20,31 +20,22 @@ export default function DesignCard({ design, onDelete }: DesignCardProps) {
   const handleGenerate = async () => {
     setGenerating(true)
     try {
-      // Get auth token
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) throw new Error('Not authenticated')
-
-      const response = await fetch(`http://localhost:3000/api/designs/${design.id}/generate`, {
+      const data = await apiRequest(`/api/designs/${design.id}/generate`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
       })
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to generate code')
+      const result = data.result
+      if (!result || !result.components) {
+        throw new Error('Unexpected response format from code generation')
       }
 
-      toast.success(`Generated ${data.result.stats.componentsGenerated} components!`)
+      toast.success(`Generated ${result.stats?.componentsGenerated ?? result.components.length} components!`)
 
-      // Load components after generation
-      setComponents(data.result.components)
+      // Load full components from API to get all fields (including language)
+      await loadComponents()
       setShowComponents(true)
     } catch (error: any) {
-      toast.error(error.message)
+      toast.error(error.message || 'Failed to generate code')
     } finally {
       setGenerating(false)
     }
@@ -53,21 +44,11 @@ export default function DesignCard({ design, onDelete }: DesignCardProps) {
   const loadComponents = async () => {
     setLoadingComponents(true)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) throw new Error('Not authenticated')
-
-      const response = await fetch(`http://localhost:3000/api/designs/${design.id}/components`, {
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-      })
-
-      const data = await response.json()
-      if (response.ok) {
-        setComponents(data.components || [])
-      }
+      const data = await apiRequest(`/api/designs/${design.id}/components`)
+      setComponents(data.components || [])
     } catch (error: any) {
       console.error('Failed to load components:', error)
+      toast.error('Failed to load components')
     } finally {
       setLoadingComponents(false)
     }
@@ -163,7 +144,7 @@ export default function DesignCard({ design, onDelete }: DesignCardProps) {
                       {component.name}
                     </span>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500">{component.language}</span>
+                      <span className="text-xs text-gray-500">{component.language || 'tsx'}</span>
                       <button
                         onClick={() => setSelectedComponent(component)}
                         className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"

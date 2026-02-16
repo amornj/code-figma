@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Code, Eye, Columns, Save, X } from 'lucide-react'
 import CodeEditor from './CodeEditor'
-import { supabase } from '@/lib/supabase'
+import { apiRequest } from '@/lib/api'
 import toast from 'react-hot-toast'
 
 interface Component {
@@ -37,27 +37,16 @@ export default function ComponentViewer({
   const handleSave = async () => {
     setIsSaving(true)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) throw new Error('Not authenticated')
-
-      const response = await fetch(`http://localhost:3000/api/components/${component.id}`, {
+      await apiRequest(`/api/components/${component.id}`, {
         method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ code: editedCode }),
       })
-
-      if (!response.ok) {
-        throw new Error('Failed to save component')
-      }
 
       toast.success('Component saved!')
       setHasChanges(false)
       onUpdate?.()
     } catch (error: any) {
-      toast.error(error.message)
+      toast.error(error.message || 'Failed to save component')
     } finally {
       setIsSaving(false)
     }
@@ -70,7 +59,7 @@ export default function ComponentViewer({
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <div>
             <h2 className="text-xl font-bold text-gray-900">{component.name}</h2>
-            <p className="text-sm text-gray-500">{component.language}</p>
+            <p className="text-sm text-gray-500">{component.language || 'tsx'}</p>
           </div>
 
           <div className="flex items-center gap-3">
@@ -142,9 +131,9 @@ export default function ComponentViewer({
             <div className="h-full p-4">
               <CodeEditor
                 code={editedCode}
-                language={component.language}
+                language={component.language || 'typescript'}
                 onChange={handleCodeChange}
-                fileName={`${component.name}.${component.language}`}
+                fileName={`${component.name}.${component.language || 'tsx'}`}
               />
             </div>
           )}
@@ -187,9 +176,9 @@ export default function ComponentViewer({
               <div className="overflow-hidden">
                 <CodeEditor
                   code={editedCode}
-                  language={component.language}
+                  language={component.language || 'typescript'}
                   onChange={handleCodeChange}
-                  fileName={`${component.name}.${component.language}`}
+                  fileName={`${component.name}.${component.language || 'tsx'}`}
                 />
               </div>
             </div>

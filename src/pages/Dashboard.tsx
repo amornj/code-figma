@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { apiRequest } from '@/lib/api'
 import { Project } from '@/types'
 import toast from 'react-hot-toast'
 import { Plus, FolderOpen, LogOut } from 'lucide-react'
@@ -16,29 +17,18 @@ export default function Dashboard() {
   const { data: projects, isLoading } = useQuery({
     queryKey: ['projects'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('projects')
-        .select('*')
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
-      return data as Project[]
+      const data = await apiRequest('/api/projects')
+      return data.projects as Project[]
     },
   })
 
   const createProject = useMutation({
     mutationFn: async (project: { name: string; description: string }) => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Not authenticated')
-
-      const { data, error } = await supabase
-        .from('projects')
-        .insert([{ ...project, user_id: user.id }])
-        .select()
-        .single()
-
-      if (error) throw error
-      return data
+      const data = await apiRequest('/api/projects', {
+        method: 'POST',
+        body: JSON.stringify(project),
+      })
+      return data.project
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] })

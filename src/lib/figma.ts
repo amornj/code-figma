@@ -45,8 +45,8 @@ export function parseFigmaUrl(url: string): { fileKey: string; nodeId?: string }
   try {
     const urlObj = new URL(url)
 
-    // Match patterns like /file/KEY or /design/KEY
-    const pathMatch = urlObj.pathname.match(/\/(file|design)\/([a-zA-Z0-9]+)/)
+    // Match patterns like /file/KEY, /design/KEY, or /proto/KEY
+    const pathMatch = urlObj.pathname.match(/\/(file|design|proto)\/([a-zA-Z0-9]+)/)
     if (!pathMatch) return null
 
     const fileKey = pathMatch[2]

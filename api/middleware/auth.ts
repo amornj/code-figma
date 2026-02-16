@@ -17,6 +17,19 @@ export async function authMiddleware(
   next: NextFunction
 ) {
   try {
+    // DEV ONLY: bypass auth with X-Dev-Bypass header
+    // Uses supabaseAdmin (anon key, no RLS) for DB operations
+    if (process.env.NODE_ENV !== 'production' && req.headers['x-dev-bypass'] === 'true') {
+      req.user = {
+        id: '00000000-0000-0000-0000-000000000000',
+        email: 'dev@localhost',
+      }
+      req.accessToken = 'dev-bypass'
+      req.supabase = supabaseAdmin
+      console.warn('[DEV] Auth bypassed - using supabaseAdmin (no RLS)')
+      return next()
+    }
+
     const authHeader = req.headers.authorization
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {

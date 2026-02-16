@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { apiRequest } from '@/lib/api'
 import { Project as ProjectType } from '@/types'
 import { useFigmaDesigns, useImportFigmaDesign, useDeleteFigmaDesign } from '@/hooks/useFigmaDesigns'
 import { ArrowLeft, Plus, Image as ImageIcon } from 'lucide-react'
@@ -12,18 +12,13 @@ export default function Project() {
   const navigate = useNavigate()
   const [showImportModal, setShowImportModal] = useState(false)
   const [figmaUrl, setFigmaUrl] = useState('')
+  const [importError, setImportError] = useState<string | null>(null)
 
   const { data: project, isLoading: projectLoading } = useQuery({
     queryKey: ['project', id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('id', id)
-        .single()
-
-      if (error) throw error
-      return data as ProjectType
+      const data = await apiRequest(`/api/projects/${id}`)
+      return data.project as ProjectType
     },
   })
 
@@ -34,13 +29,14 @@ export default function Project() {
   const handleImport = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!figmaUrl.trim()) return
+    setImportError(null)
 
     try {
       await importDesign.mutateAsync(figmaUrl)
       setFigmaUrl('')
       setShowImportModal(false)
-    } catch {
-      // Error is handled by the mutation's onError callback (shows toast)
+    } catch (error: any) {
+      setImportError(error.message || 'Failed to import design')
     }
   }
 
@@ -171,12 +167,19 @@ export default function Project() {
                 </p>
               </div>
 
+              {importError && (
+                <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                  <p className="text-sm text-red-800">{importError}</p>
+                </div>
+              )}
+
               <div className="flex gap-3 justify-end">
                 <button
                   type="button"
                   onClick={() => {
                     setShowImportModal(false)
                     setFigmaUrl('')
+                    setImportError(null)
                   }}
                   className="px-4 py-2 text-gray-700 hover:text-gray-900"
                 >

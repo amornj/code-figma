@@ -5,6 +5,7 @@ import projectsRouter from './routes/projects.js'
 import designsRouter from './routes/designs.js'
 import componentsRouter from './routes/components.js'
 import { errorHandler } from './middleware/errorHandler.js'
+import { supabaseAdmin } from './utils/supabase.js'
 
 dotenv.config()
 
@@ -22,6 +23,35 @@ app.use(express.json())
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
+
+// DEV ONLY: Auth helpers for testing
+if (process.env.NODE_ENV !== 'production') {
+  app.post('/api/dev/signup', async (req, res) => {
+    const { email, password } = req.body
+    if (!email || !password) {
+      return res.status(400).json({ error: 'email and password required' })
+    }
+    const { data, error } = await supabaseAdmin.auth.signUp({ email, password })
+    if (error) return res.status(400).json({ error: error.message, code: error.status })
+    res.json({
+      user: data.user ? { id: data.user.id, email: data.user.email, confirmed: data.user.email_confirmed_at } : null,
+      session: data.session ? { access_token: data.session.access_token, expires_at: data.session.expires_at } : null,
+    })
+  })
+
+  app.post('/api/dev/signin', async (req, res) => {
+    const { email, password } = req.body
+    if (!email || !password) {
+      return res.status(400).json({ error: 'email and password required' })
+    }
+    const { data, error } = await supabaseAdmin.auth.signInWithPassword({ email, password })
+    if (error) return res.status(400).json({ error: error.message, code: error.status })
+    res.json({
+      user: { id: data.user.id, email: data.user.email },
+      session: { access_token: data.session.access_token, expires_at: data.session.expires_at },
+    })
+  })
+}
 
 // API Routes
 app.use('/api/projects', projectsRouter)

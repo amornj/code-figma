@@ -6,6 +6,16 @@ const router = express.Router()
 const FIGMA_API_BASE = 'https://api.figma.com/v1'
 const FIGMA_TOKEN = process.env.VITE_FIGMA_ACCESS_TOKEN
 
+/** Log Supabase errors with full detail */
+function logSupabaseError(context: string, error: any) {
+  console.error(`[Supabase ${context}]`, {
+    message: error.message,
+    code: error.code,
+    details: error.details,
+    hint: error.hint,
+  })
+}
+
 router.use(authMiddleware)
 
 // POST /api/designs/import - Import Figma design
@@ -30,7 +40,8 @@ router.post('/import', async (req: AuthRequest, res) => {
       .single()
 
     if (projectError || !project) {
-      return res.status(404).json({ error: 'Project not found' })
+      if (projectError) logSupabaseError('project lookup', projectError)
+      return res.status(404).json({ error: 'Project not found or access denied' })
     }
 
     // Parse Figma URL - handle /file/, /design/, and /proto/ patterns
@@ -102,14 +113,206 @@ router.post('/import', async (req: AuthRequest, res) => {
       .single()
 
     if (error) {
-      console.error('Supabase insert error:', error)
-      throw new Error('Failed to save design to database')
+      logSupabaseError('design insert', error)
+      return res.status(500).json({
+        error: 'Failed to save design to database',
+        details: process.env.NODE_ENV === 'development' ? { code: error.code, message: error.message, hint: error.hint } : undefined,
+      })
     }
 
+    console.log(`[Import] Design saved: ${data.id} (${data.name}) for project ${projectId}`)
     res.status(201).json({ design: data })
   } catch (error: any) {
     console.error('Import error:', error.response?.data || error.message)
     res.status(500).json({ error: error.message || 'Failed to import design' })
+  }
+})
+
+// POST /api/designs/mock-import - Import a design with sample Figma data (for testing without Figma API)
+router.post('/mock-import', async (req: AuthRequest, res) => {
+  try {
+    const { projectId } = req.body
+    const db = req.supabase!
+
+    if (!projectId) {
+      return res.status(400).json({ error: 'projectId is required' })
+    }
+
+    // Verify user owns the project (RLS)
+    const { data: project, error: projectError } = await db
+      .from('projects')
+      .select('id')
+      .eq('id', projectId)
+      .single()
+
+    if (projectError || !project) {
+      if (projectError) logSupabaseError('mock-import project lookup', projectError)
+      return res.status(404).json({ error: 'Project not found or access denied' })
+    }
+
+    // Sample Figma document data that exercises the code generation pipeline
+    const mockFigmaData = {
+      name: 'Mock Design - Sample Card',
+      lastModified: new Date().toISOString(),
+      thumbnailUrl: null,
+      version: '1',
+      document: {
+        id: '0:0',
+        name: 'Document',
+        type: 'DOCUMENT',
+        children: [
+          {
+            id: '0:1',
+            name: 'Page 1',
+            type: 'CANVAS',
+            children: [
+              {
+                id: '1:2',
+                name: 'Card',
+                type: 'FRAME',
+                visible: true,
+                absoluteBoundingBox: { x: 0, y: 0, width: 384, height: 320 },
+                layoutMode: 'VERTICAL',
+                primaryAxisSizingMode: 'FIXED',
+                counterAxisSizingMode: 'FIXED',
+                primaryAxisAlignItems: 'MIN',
+                counterAxisAlignItems: 'MIN',
+                paddingTop: 16,
+                paddingRight: 16,
+                paddingBottom: 16,
+                paddingLeft: 16,
+                itemSpacing: 12,
+                cornerRadius: 12,
+                fills: [{ type: 'SOLID', color: { r: 1, g: 1, b: 1, a: 1 } }],
+                effects: [{ type: 'DROP_SHADOW', radius: 8, color: { r: 0, g: 0, b: 0, a: 0.1 }, offset: { x: 0, y: 2 } }],
+                children: [
+                  {
+                    id: '1:3',
+                    name: 'Title',
+                    type: 'TEXT',
+                    visible: true,
+                    characters: 'Card Title',
+                    style: { fontFamily: 'Inter', fontWeight: 700, fontSize: 24, textAlignHorizontal: 'LEFT' },
+                    fills: [{ type: 'SOLID', color: { r: 0, g: 0, b: 0, a: 1 } }],
+                  },
+                  {
+                    id: '1:4',
+                    name: 'Description',
+                    type: 'TEXT',
+                    visible: true,
+                    characters: 'This is a sample card description with some text content.',
+                    style: { fontFamily: 'Inter', fontWeight: 400, fontSize: 16, textAlignHorizontal: 'LEFT' },
+                    fills: [{ type: 'SOLID', color: { r: 0.42, g: 0.45, b: 0.50, a: 1 } }],
+                  },
+                  {
+                    id: '1:5',
+                    name: 'Button Row',
+                    type: 'FRAME',
+                    visible: true,
+                    layoutMode: 'HORIZONTAL',
+                    primaryAxisAlignItems: 'MAX',
+                    counterAxisAlignItems: 'CENTER',
+                    itemSpacing: 8,
+                    children: [
+                      {
+                        id: '1:6',
+                        name: 'Button',
+                        type: 'FRAME',
+                        visible: true,
+                        layoutMode: 'HORIZONTAL',
+                        primaryAxisAlignItems: 'CENTER',
+                        counterAxisAlignItems: 'CENTER',
+                        paddingTop: 8,
+                        paddingRight: 16,
+                        paddingBottom: 8,
+                        paddingLeft: 16,
+                        cornerRadius: 8,
+                        fills: [{ type: 'SOLID', color: { r: 0.23, g: 0.51, b: 0.96, a: 1 } }],
+                        children: [
+                          {
+                            id: '1:7',
+                            name: 'Button Text',
+                            type: 'TEXT',
+                            visible: true,
+                            characters: 'Click Me',
+                            style: { fontFamily: 'Inter', fontWeight: 600, fontSize: 14, textAlignHorizontal: 'CENTER' },
+                            fills: [{ type: 'SOLID', color: { r: 1, g: 1, b: 1, a: 1 } }],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+              {
+                id: '2:1',
+                name: 'Hero Section',
+                type: 'FRAME',
+                visible: true,
+                absoluteBoundingBox: { x: 0, y: 400, width: 1200, height: 600 },
+                layoutMode: 'VERTICAL',
+                primaryAxisAlignItems: 'CENTER',
+                counterAxisAlignItems: 'CENTER',
+                paddingTop: 64,
+                paddingRight: 32,
+                paddingBottom: 64,
+                paddingLeft: 32,
+                itemSpacing: 24,
+                fills: [{ type: 'SOLID', color: { r: 0.95, g: 0.96, b: 0.97, a: 1 } }],
+                children: [
+                  {
+                    id: '2:2',
+                    name: 'Hero Title',
+                    type: 'TEXT',
+                    visible: true,
+                    characters: 'Welcome to Our Platform',
+                    style: { fontFamily: 'Inter', fontWeight: 700, fontSize: 36, textAlignHorizontal: 'CENTER' },
+                    fills: [{ type: 'SOLID', color: { r: 0, g: 0, b: 0, a: 1 } }],
+                  },
+                  {
+                    id: '2:3',
+                    name: 'Hero Subtitle',
+                    type: 'TEXT',
+                    visible: true,
+                    characters: 'Build something amazing with our tools',
+                    style: { fontFamily: 'Inter', fontWeight: 400, fontSize: 18, textAlignHorizontal: 'CENTER' },
+                    fills: [{ type: 'SOLID', color: { r: 0.42, g: 0.45, b: 0.50, a: 1 } }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    }
+
+    // Insert mock design into database
+    const { data, error } = await db
+      .from('figma_designs')
+      .insert([{
+        project_id: projectId,
+        name: mockFigmaData.name,
+        figma_file_key: `mock_${Date.now()}`,
+        figma_node_id: null,
+        thumbnail_url: null,
+        figma_data: mockFigmaData,
+      }])
+      .select()
+      .single()
+
+    if (error) {
+      logSupabaseError('mock design insert', error)
+      return res.status(500).json({
+        error: 'Failed to save mock design to database',
+        details: process.env.NODE_ENV === 'development' ? { code: error.code, message: error.message, hint: error.hint } : undefined,
+      })
+    }
+
+    console.log(`[Mock Import] Design saved: ${data.id} (${data.name}) for project ${projectId}`)
+    res.status(201).json({ design: data, mock: true })
+  } catch (error: any) {
+    console.error('Mock import error:', error.message)
+    res.status(500).json({ error: error.message || 'Failed to mock import design' })
   }
 })
 
@@ -180,7 +383,8 @@ router.post('/:id/generate', async (req: AuthRequest, res) => {
       .single()
 
     if (designError || !design) {
-      return res.status(404).json({ error: 'Design not found' })
+      if (designError) logSupabaseError('design lookup for codegen', designError)
+      return res.status(404).json({ error: 'Design not found or access denied' })
     }
 
     // Check if figma_data exists

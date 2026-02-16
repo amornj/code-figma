@@ -25,38 +25,32 @@ export function useImportFigmaDesign(projectId: string) {
 
   return useMutation({
     mutationFn: async (figmaUrl: string) => {
-      // Parse Figma URL
-      const parsed = figma.parseFigmaUrl(figmaUrl)
-      if (!parsed) {
-        throw new Error('Invalid Figma URL')
+      // Get auth session
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        throw new Error('Not authenticated')
       }
 
-      const { fileKey, nodeId } = parsed
+      // Use backend API to import design
+      const response = await fetch('http://localhost:3000/api/designs/import', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          projectId,
+          figmaUrl,
+        }),
+      })
 
-      // Fetch Figma file data
-      const fileData = await figma.getFigmaFile(fileKey)
+      const data = await response.json()
 
-      // Get thumbnail
-      const thumbnailUrl = await figma.getFigmaThumbnail(fileKey)
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to import design')
+      }
 
-      // Insert into database
-      const { data, error } = await supabase
-        .from('figma_designs')
-        .insert([
-          {
-            project_id: projectId,
-            name: fileData.name,
-            figma_file_key: fileKey,
-            figma_node_id: nodeId || null,
-            thumbnail_url: thumbnailUrl,
-            figma_data: fileData,
-          },
-        ])
-        .select()
-        .single()
-
-      if (error) throw error
-      return data
+      return data.design
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['figma-designs', projectId] })

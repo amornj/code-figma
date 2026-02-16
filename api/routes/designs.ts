@@ -39,6 +39,18 @@ router.post('/import', async (req: AuthRequest, res) => {
     const fileKey = urlMatch[2]
     const nodeId = new URL(figmaUrl).searchParams.get('node-id') || null
 
+    // Check if design already exists
+    const { data: existing, error: existingError } = await supabaseAdmin
+      .from('figma_designs')
+      .select('id')
+      .eq('project_id', projectId)
+      .eq('figma_file_key', fileKey)
+      .maybeSingle()
+
+    if (existing) {
+      return res.status(409).json({ error: 'Design already imported for this project' })
+    }
+
     // Fetch from Figma API
     const response = await axios.get(`${FIGMA_API_BASE}/files/${fileKey}`, {
       headers: { 'X-Figma-Token': FIGMA_TOKEN },
@@ -65,6 +77,14 @@ router.post('/import', async (req: AuthRequest, res) => {
     res.status(201).json({ design: data })
   } catch (error: any) {
     console.error('Import error:', error.response?.data || error.message)
+
+    // Handle Figma API rate limiting
+    if (error.response?.status === 429) {
+      return res.status(429).json({
+        error: 'Figma API rate limit reached. Please wait a few minutes and try again.'
+      })
+    }
+
     res.status(500).json({ error: error.message })
   }
 })
